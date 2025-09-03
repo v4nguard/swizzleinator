@@ -1,0 +1,18 @@
+[package]
+name = "swizzleinator"
+version = "0.1.0"
+edition = "2021"
+authors = ["cohaereo <cohae@cohae.dev>", "nblock <nblock@nblock.dev>"]
+description = "Texture swizzling/deswizzling library"
+homepage = "https://github.com/v4nguard/swizzleinator"
+repository = "https://github.com/v4nguard/swizzleinator"
+documentation = "https://docs.rs/swizzleinator"
+license = "MIT"
+readme = "README.md"
+keywords = ["swizzle", "image"]
+include = ["**/*.rs", "Cargo.toml"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dev-dependencies]
+paste = "1"
