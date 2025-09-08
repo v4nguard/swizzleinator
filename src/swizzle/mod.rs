@@ -4,7 +4,7 @@ pub mod xbox;
 use core::{error::Error, fmt};
 
 #[derive(Debug, Clone, Copy)]
-enum TextureSlice {
+pub enum TextureSlice {
     Source,
     Dest,
 }
