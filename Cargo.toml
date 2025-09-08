@@ -1,6 +1,6 @@
 [package]
 name = "swizzleinator"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 authors = ["cohaereo <cohae@cohae.dev>", "nblock <nblock@nblock.dev>"]
 description = "Texture swizzling/deswizzling library"
