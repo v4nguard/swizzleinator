@@ -1,26 +1,62 @@
 pub mod ps;
 pub mod xbox;
 
-pub trait Swizzler {
-    fn swizzle<T: Format>(
-        source: &[u8],
-        width: usize,
-        height: usize,
-        depth: usize,
-        format: T,
-        align_resolution: bool,
-    ) -> Result<Vec<u8>, crate::SwizzleError>;
+use core::{error::Error, fmt};
+
+#[derive(Debug, Clone, Copy)]
+enum TextureSlice {
+    Source,
+    Dest,
 }
 
-pub trait Deswizzler {
-    fn deswizzle<T: Format>(
-        source: &[u8],
-        width: usize,
-        height: usize,
-        depth: usize,
+#[derive(Debug, Clone, Copy)]
+pub enum SwizzleError {
+    FormatOutOfRange(u32),
+    OutOfBounds(TextureSlice),
+}
+
+impl Error for SwizzleError {}
+
+impl fmt::Display for SwizzleError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            SwizzleError::OutOfBounds(s) => write!(f, "slice {s:?} out of bounds"),
+            SwizzleError::FormatOutOfRange(e) => write!(f, "format is out of range ({e})"),
+        }
+    }
+}
+
+/// This trait defines the function used to swizzle/tile image data
+/// * `source` - Source image data.
+/// * `dest` - Destination slice. When swizzling an image that has dimensions that are not a power of two,
+///   it is recommended to make this larger than the size of the unswizzled texture, or else data could be lost.
+/// * `dimensions` - Dimensions of the image: `(width, height, depth)`.
+/// * `format` - Expected image format.
+/// * `align_resolution` - Align the resolution of the image to the next power of two.
+pub trait Swizzler {
+    fn swizzle<T: Format>(
+        source: &mut [u8],
+        dest: &mut [u8],
+        dimensions: (usize, usize, usize),
         format: T,
         align_resolution: bool,
-    ) -> Result<Vec<u8>, crate::SwizzleError>;
+    ) -> Result<(), SwizzleError>;
+}
+
+/// The trait that defines an interface to deswizzle/detile image data
+/// * `source` - Source image data.
+/// * `dest` - Destination slice, usually with the size `(width * height * depth * format.bpp()) / 8`.
+/// * `dimensions` - Dimensions of the image: `(width, height, depth)`.
+/// * `format` - Expected image format.
+/// * `align_resolution` - Align the resolution of the image to the next power of two.
+pub trait Deswizzler {
+    fn deswizzle<T: Format>(
+        source: &mut [u8],
+        dest: &mut [u8],
+        dimensions: (usize, usize, usize),
+        format: T,
+        align_resolution: bool,
+    ) -> Result<(), SwizzleError>;
 }
 
 /// A trait that defines a given texture format

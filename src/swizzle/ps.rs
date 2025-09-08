@@ -1,54 +1,45 @@
-use super::{Deswizzler, Format, Swizzler};
+use super::{Deswizzler, Format, SwizzleError, Swizzler};
 
 pub struct Ps3;
 
 impl Swizzler for Ps3 {
     fn swizzle<T: Format>(
-        source: &[u8],
-        width: usize,
-        height: usize,
-        depth: usize,
+        source: &mut [u8],
+        dest: &mut [u8],
+        dimensions: (usize, usize, usize),
         format: T,
         align_resolution: bool,
-    ) -> Result<Vec<u8>, crate::SwizzleError> {
-        ps3::do_swizzle(
-            source,
-            width,
-            height,
-            depth,
-            format,
-            false,
-            align_resolution,
-        )
+    ) -> Result<(), SwizzleError> {
+        ps3::do_swizzle(source, dest, dimensions, format, false, align_resolution);
+        Ok(())
     }
 }
 
 impl Deswizzler for Ps3 {
     fn deswizzle<T: Format>(
-        source: &[u8],
-        width: usize,
-        height: usize,
-        depth: usize,
+        source: &mut [u8],
+        dest: &mut [u8],
+        dimensions: (usize, usize, usize),
         format: T,
         align_resolution: bool,
-    ) -> Result<Vec<u8>, crate::SwizzleError> {
-        ps3::do_swizzle(source, width, height, depth, format, true, align_resolution)
+    ) -> Result<(), SwizzleError> {
+        ps3::do_swizzle(source, dest, dimensions, format, true, align_resolution);
+        Ok(())
     }
 }
 
 mod ps3 {
-    use crate::swizzle::Format;
+    use crate::swizzle::{Format, SwizzleError};
 
     pub fn do_swizzle<T: Format>(
-        source: &[u8],
-        width: usize,
-        height: usize,
-        depth: usize,
+        source: &mut [u8],
+        dest: &mut [u8],
+        dimensions: (usize, usize, usize),
         format: T,
         unswizzle: bool,
         align_resolution: bool,
-    ) -> Result<Vec<u8>, crate::SwizzleError> {
-        let mut destination = vec![0; source.len()];
+    ) {
+        let (width, height, depth) = dimensions;
         let pixel_block_size = format.pixel_block_size();
         let block_size = format.block_size();
 
@@ -66,7 +57,7 @@ mod ps3 {
         let texel_size = width_texels * height_texels;
 
         for z in 0..depth {
-            let slice_dest = &mut destination[(z * width * height * format.bpp()) / 8..];
+            let slice_dest = &mut dest[(z * width * height * format.bpp()) / 8..];
 
             for t in 0..texel_size {
                 let pixel_index = crate::swizzle::morton(t, width_texels, height_texels);
@@ -85,7 +76,6 @@ mod ps3 {
                 data_index += block_size;
             }
         }
-        Ok(destination)
     }
 }
 
@@ -93,35 +83,27 @@ pub struct Ps4;
 
 impl Swizzler for Ps4 {
     fn swizzle<T: Format>(
-        source: &[u8],
-        width: usize,
-        height: usize,
-        depth: usize,
+        source: &mut [u8],
+        dest: &mut [u8],
+        dimensions: (usize, usize, usize),
         format: T,
         align_resolution: bool,
-    ) -> Result<Vec<u8>, crate::SwizzleError> {
-        ps4::do_swizzle(
-            source,
-            width,
-            height,
-            depth,
-            format,
-            false,
-            align_resolution,
-        )
+    ) -> Result<(), SwizzleError> {
+        ps4::do_swizzle(source, dest, dimensions, format, false, align_resolution);
+        Ok(())
     }
 }
 
 impl Deswizzler for Ps4 {
     fn deswizzle<T: Format>(
-        source: &[u8],
-        width: usize,
-        height: usize,
-        depth: usize,
+        source: &mut [u8],
+        dest: &mut [u8],
+        dimensions: (usize, usize, usize),
         format: T,
         align_resolution: bool,
-    ) -> Result<Vec<u8>, crate::SwizzleError> {
-        ps4::do_swizzle(source, width, height, depth, format, true, align_resolution)
+    ) -> Result<(), SwizzleError> {
+        ps4::do_swizzle(source, dest, dimensions, format, true, align_resolution);
+        Ok(())
     }
 }
 
@@ -129,15 +111,14 @@ mod ps4 {
     use crate::swizzle::Format;
 
     pub fn do_swizzle<T: Format>(
-        source: &[u8],
-        width: usize,
-        height: usize,
-        depth: usize,
+        source: &mut [u8],
+        dest: &mut [u8],
+        dimensions: (usize, usize, usize),
         format: T,
         unswizzle: bool,
         align_resolution: bool,
-    ) -> Result<Vec<u8>, crate::SwizzleError> {
-        let mut destination = vec![0; source.len()];
+    ) {
+        let (width, height, depth) = dimensions;
         let pixel_block_size = format.pixel_block_size();
         let block_size = format.block_size();
 
@@ -157,7 +138,7 @@ mod ps4 {
         let mut data_index = 0;
 
         for z in 0..depth {
-            let slice_dest = &mut destination[(z * width * height * format.bpp()) / 8..];
+            let slice_dest = &mut dest[(z * width * height * format.bpp()) / 8..];
 
             for y in 0..height_texels_aligned {
                 for x in 0..width_texels_aligned {
@@ -190,6 +171,5 @@ mod ps4 {
                 }
             }
         }
-        Ok(destination)
     }
 }

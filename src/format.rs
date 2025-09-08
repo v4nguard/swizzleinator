@@ -1,5 +1,5 @@
-use crate::{swizzle::Format, SwizzleError};
-use std::mem::transmute;
+use crate::swizzle::{Format, SwizzleError};
+use core::mem::transmute;
 
 #[allow(non_camel_case_types, dead_code, clippy::upper_case_acronyms)]
 #[repr(u32)]
@@ -790,9 +790,16 @@ impl Format for XenosSurfaceFormat {
     fn x360_swap(&self) -> bool {
         matches!(
             self,
-            XenosSurfaceFormat::k_8_8_8_8
-                | XenosSurfaceFormat::k_8_8_8_8_A
-                | XenosSurfaceFormat::k_8_8_8_8_AS_16_16_16_16
+            XenosSurfaceFormat::k_DXT1
+                | XenosSurfaceFormat::k_DXT1_AS_16_16_16_16
+                | XenosSurfaceFormat::k_DXN
+                | XenosSurfaceFormat::k_DXT2_3
+                | XenosSurfaceFormat::k_DXT2_3_AS_16_16_16_16
+                | XenosSurfaceFormat::k_DXT3A
+                | XenosSurfaceFormat::k_DXT3A_AS_1_1_1_1
+                | XenosSurfaceFormat::k_DXT4_5
+                | XenosSurfaceFormat::k_DXT4_5_AS_16_16_16_16
+                | XenosSurfaceFormat::k_DXT5A
         )
     }
 }

@@ -1,80 +1,67 @@
 // Adapted from https://github.com/bartlomiejduda/ReverseBox/blob/main/reversebox/image/swizzling/swizzle_x360.py
 
-use super::{Deswizzler, Format, Swizzler};
+use super::{Deswizzler, Format, SwizzleError, Swizzler};
 
 pub struct Xbox360;
 
 impl Swizzler for Xbox360 {
     fn swizzle<T: Format>(
-        source: &[u8],
-        width: usize,
-        height: usize,
-        depth: usize,
+        source: &mut [u8],
+        dest: &mut [u8],
+        dimentions: (usize, usize, usize),
         format: T,
         align_resolution: bool,
-    ) -> Result<Vec<u8>, crate::SwizzleError> {
-        x360::do_swizzle(
-            source,
-            width,
-            height,
-            depth,
-            format,
-            false,
-            align_resolution,
-        )
+    ) -> Result<(), SwizzleError> {
+        x360::do_swizzle(source, dest, dimentions, format, false, align_resolution)
     }
 }
 
 impl Deswizzler for Xbox360 {
     fn deswizzle<T: Format>(
-        source: &[u8],
-        width: usize,
-        height: usize,
-        depth: usize,
+        source: &mut [u8],
+        dest: &mut [u8],
+        dimentions: (usize, usize, usize),
         format: T,
         align_resolution: bool,
-    ) -> Result<Vec<u8>, crate::SwizzleError> {
-        x360::do_swizzle(source, width, height, depth, format, true, align_resolution)
+    ) -> Result<(), SwizzleError> {
+        x360::do_swizzle(source, dest, dimentions, format, true, align_resolution)
     }
 }
 
 mod x360 {
-    use crate::swizzle::Format;
+    use crate::swizzle::{Format, SwizzleError, TextureSlice};
 
     pub fn do_swizzle<T: Format>(
-        source: &[u8],
-        width: usize,
-        height: usize,
-        depth: usize,
+        source: &mut [u8],
+        dest: &mut [u8],
+        dimensions: (usize, usize, usize),
         format: T,
         unswizzle: bool,
         align_resolution: bool,
-    ) -> Result<Vec<u8>, crate::SwizzleError> {
-        let mut source = source.to_vec();
+    ) -> Result<(), SwizzleError> {
         if format.x360_swap() {
-            swap_byte_order_x360(&mut source);
+            swap_byte_order_x360(source);
         }
 
-        let untiled = untile_x360_image_data(
+        untile_x360_image_data(
             &source,
-            width,
-            height,
-            depth,
+            dest,
+            dimensions,
             format.pixel_block_size(),
             format.block_size(),
             unswizzle,
-        );
+        )?;
 
-        let mut result = Vec::with_capacity(untiled.len());
         if format.x360_swap() {
-            for chunk in untiled.chunks_exact(4) {
-                result.extend_from_slice(&[chunk[1], chunk[2], chunk[3], chunk[0]]);
+            for chunk in dest.chunks_exact_mut(4) {
+                let (x, y, z, w) = (chunk[1], chunk[2], chunk[3], chunk[0]);
+                chunk[0] = x;
+                chunk[1] = y;
+                chunk[2] = z;
+                chunk[3] = w;
             }
-        } else {
-            result.extend_from_slice(&untiled);
         }
-
-        Ok(result)
+        Ok(())
     }
 
     pub fn swap_byte_order_x360(image_data: &mut [u8]) {
@@ -132,32 +119,50 @@ mod x360 {
 
     fn untile_x360_image_data(
         image_data: &[u8],
-        image_width: usize,
-        image_height: usize,
-        image_depth: usize,
+        dest: &mut [u8],
+        dimensions: (usize, usize, usize),
         block_pixel_size: usize,
         texel_byte_pitch: usize,
         deswizzle: bool,
-    ) -> Vec<u8> {
-        let mut converted_data = vec![0; image_data.len()];
+    ) -> Result<(), SwizzleError> {
+        let (image_width, image_height, image_depth) = dimensions;
 
         let width_in_blocks = image_width / block_pixel_size;
         let height_in_blocks = image_height / block_pixel_size;
-        let slice_size = width_in_blocks * height_in_blocks * texel_byte_pitch;
+
+        let padded_width_in_blocks = (width_in_blocks + 31) & !31;
+        let padded_height_in_blocks = (height_in_blocks + 31) & !31;
+
+        let slice_size = padded_width_in_blocks * padded_height_in_blocks * texel_byte_pitch;
 
         for slice in 0..image_depth {
-            let slice_src = &image_data[slice * slice_size..];
-            let slice_dest = &mut converted_data[slice * slice_size..];
+            let Some(slice_src) = image_data.get(slice * slice_size..) else {
+                return Err(SwizzleError::OutOfBounds(TextureSlice::Source));
+            };
 
-            for j in 0..height_in_blocks {
-                for i in 0..width_in_blocks {
-                    let block_offset = j * width_in_blocks + i;
-                    let x = xg_address_2d_tiled_x(block_offset, width_in_blocks, texel_byte_pitch);
-                    let y = xg_address_2d_tiled_y(block_offset, width_in_blocks, texel_byte_pitch);
-                    let src_byte_offset =
-                        j * width_in_blocks * texel_byte_pitch + i * texel_byte_pitch;
-                    let dest_byte_offset =
-                        y * width_in_blocks * texel_byte_pitch + x * texel_byte_pitch;
+            let Some(slice_dest) = dest.get_mut(slice * slice_size..) else {
+                return Err(SwizzleError::OutOfBounds(TextureSlice::Dest));
+            };
+
+            for j in 0..padded_height_in_blocks {
+                for i in 0..padded_width_in_blocks {
+                    let block_offset = j * padded_width_in_blocks + i;
+
+                    let x = xg_address_2d_tiled_x(
+                        block_offset,
+                        padded_width_in_blocks,
+                        texel_byte_pitch,
+                    );
+
+                    let y = xg_address_2d_tiled_y(
+                        block_offset,
+                        padded_width_in_blocks,
+                        texel_byte_pitch,
+                    );
+
+                    let src_byte_offset = block_offset * texel_byte_pitch;
+
+                    let dest_byte_offset = (y * width_in_blocks + x) * texel_byte_pitch;
 
                     if dest_byte_offset + texel_byte_pitch > slice_dest.len()
                         || src_byte_offset + texel_byte_pitch > slice_src.len()
@@ -168,6 +173,9 @@ mod x360 {
                     if deswizzle {
                         match slice_src.get(src_byte_offset..src_byte_offset + texel_byte_pitch) {
                             Some(source) => {
+                                if source.iter().all(|&b| b == 0) {
+                                    continue;
+                                }
                                 slice_dest[dest_byte_offset..dest_byte_offset + texel_byte_pitch]
                                     .copy_from_slice(source);
                             }
@@ -189,7 +197,6 @@ mod x360 {
                 }
             }
         }
-
-        converted_data
+        Ok(())
     }
 }
